@@ -15,34 +15,34 @@ public class Appl {
     int historyCursor = -1;
     String tmpHistoryLetter = "";
 
-    private void addFirstHistory(@RequestBody TextDto textDto, int size) {
-        histories.add(new History("add", size, size + textDto.text.length(), textDto.text));
+    private synchronized void addFirstHistory(@RequestBody TextDto textDto, int size) {
+        histories.add(new History("add", size, size + textDto.text.length(), textDto.text)); //"add" in CONST
         historyCursor++;
     }
 
-    private void historiesCleaner() {
+    private void updateHistory() {
         if (historyCursor < histories.size() - 1) {
             histories.subList(historyCursor, histories.size()).clear();
         }
     }
 
-    private void operationStyle() {
+    private void operationChangesStyle() { //in switch
         if (operationGet().equals("bold")) {
-            for (int i = histories.get(historyCursor).from; i <= histories.get(historyCursor).to; i++) {
+            for (int i = getHistoryCursor(historyCursor).from; i <= getHistoryCursor(historyCursor).to; i++) {
                 boolean currentStatus = letterList.get(i).isBold();
                 letterList.get(i).setBold(!currentStatus);
             }
         }
 
         if (operationGet().equals("italic")) {
-            for (int ind = histories.get(historyCursor).from; ind <= histories.get(historyCursor).to; ind++) {
+            for (int ind = getHistoryCursor(historyCursor).from; ind <= getHistoryCursor(historyCursor).to; ind++) {
                 boolean currentStatus = letterList.get(ind).isItalic();
                 letterList.get(ind).setItalic(!currentStatus);
             }
         }
 
         if (operationGet().equals("underline")) {
-            for (int ind = histories.get(historyCursor).from; ind <= histories.get(historyCursor).to; ind++) {
+            for (int ind = getHistoryCursor(historyCursor).from; ind <= getHistoryCursor(historyCursor).to; ind++) {
                 boolean currentStatus = letterList.get(ind).isUnderline();
                 letterList.get(ind).setUnderline(!currentStatus);
             }
@@ -53,32 +53,34 @@ public class Appl {
     private void operationRemove() {
         if (operationGet().equals("remove")) {
             int j = 0;
-            for (int ind = histories.get(historyCursor).from; ind < histories.get(historyCursor).to; ind++) {
-                letterList.add(ind, new Letter(histories.get(historyCursor).text.charAt(j)));
+            for (int ind = getHistoryCursor(historyCursor).from; ind < getHistoryCursor(historyCursor).to; ind++) {
+                letterList.add(ind, new Letter(getHistoryCursor(historyCursor).text.charAt(j)));
                 j++;
             }
         }
     }
 
+    private History getHistoryCursor(int historyCursor) {
+        return histories.get(historyCursor);
+    }
+
     private String operationGet() {
-        return histories.get(historyCursor).operation;
+        return getHistoryCursor(historyCursor).operation;
     }
 
     @PostMapping(path = "/addByInd", consumes = "application/json", produces = "application/json")
     String insertByIndex(@RequestParam(name = "fromPosition") Integer fromPosition,
                          @RequestBody TextDto textDto) {
-
         addFirstHistory(textDto, fromPosition);
         for (int i = 0; i < textDto.text.length(); i++) {
             Letter letter = new Letter(textDto.text.charAt(i));
             letterList.add(fromPosition, letter);
             fromPosition++;
         }
-        historiesCleaner();
+        updateHistory();
 
         return getString();
     }
-
 
 
     @PostMapping(path = "/add", consumes = "application/json", produces = "application/json")
@@ -90,74 +92,65 @@ public class Appl {
             Letter letter = new Letter(textDto.text.charAt(i));
             letterList.add(letter);
         }
-        historiesCleaner();
+        updateHistory();
 
         return getString();
     }
-
-
 
 
     @GetMapping(path = "/undo")
     String undo() {
         try {
-            histories.get(historyCursor);
+            getHistoryCursor(historyCursor);
         } catch (Exception e) {
             return "No undo action";
         }
         if (operationGet().equals("add")) {
-            for (int ind = histories.get(historyCursor).from; ind < histories.get(historyCursor).to; ind++) {
-                letterList.remove((int) histories.get(historyCursor).from);
+            for (int ind = getHistoryCursor(historyCursor).from; ind < getHistoryCursor(historyCursor).to; ind++) {
+                letterList.remove((int) getHistoryCursor(historyCursor).from);
             }
         }
         operationRemove();
-        operationStyle();
+        operationChangesStyle();
         historyCursor--;
         return getString();
     }
 
 
-
-
     @GetMapping(path = "/redo")
     String redo() {
         try {
-            histories.get(historyCursor + 1);
+            getHistoryCursor(historyCursor + 1);
         } catch (Exception e) {
             return "No redo action";
         }
         historyCursor++;
         if (operationGet().equals("add")) {
-            for (int ind = histories.get(historyCursor).from; ind < histories.get(historyCursor).to; ind++) {
-                letterList.add(ind, new Letter(histories.get(historyCursor).text.charAt(historyCursor)));
+            for (int ind = getHistoryCursor(historyCursor).from; ind < getHistoryCursor(historyCursor).to; ind++) {
+                letterList.add(ind, new Letter(getHistoryCursor(historyCursor).text.charAt(historyCursor)));
             }
         }
         if (operationGet().equals("remove")) {
-            for (int ind = histories.get(historyCursor).from; ind < histories.get(historyCursor).to; ind++) {
+            for (int ind = getHistoryCursor(historyCursor).from; ind < getHistoryCursor(historyCursor).to; ind++) {
                 letterList.remove(ind);
             }
         }
-        operationStyle();
+        operationChangesStyle();
         return getString();
     }
-
-
 
 
     @GetMapping(path = "/remove")
     String remove(@RequestParam(name = "fromPosition") Integer fromPosition,
                   @RequestParam(name = "toPosition") Integer toPosition) {
-        tmpHistoryLetter="";
+        tmpHistoryLetter = "";
         for (int i = fromPosition; i < toPosition; i++) {
             tmpHistoryLetter = tmpHistoryLetter.concat(String.valueOf(letterList.get(i).getCharacter()));
             letterList.remove((int) fromPosition);
         }
-
         histories.add(new History("remove", fromPosition, toPosition, tmpHistoryLetter));
         historyCursor++;
-
-        historiesCleaner();
-
+        updateHistory();
         return getString();
     }
 
@@ -165,7 +158,7 @@ public class Appl {
     @GetMapping(path = "/italic")
     String Italic(@RequestParam(name = "fromPosition") Integer fromPosition,
                   @RequestParam(name = "toPosition") Integer toPosition) {
-        tmpHistoryLetter="";
+        tmpHistoryLetter = "";
         for (int i = fromPosition; i <= toPosition; i++) {
             boolean currentStatus = letterList.get(i).isItalic();
             letterList.get(i).setItalic(!currentStatus);
@@ -173,14 +166,14 @@ public class Appl {
         }
         histories.add(new History("italic", fromPosition, toPosition, tmpHistoryLetter));
         historyCursor++;
-        historiesCleaner();
+        updateHistory();
         return getString();
     }
 
     @GetMapping(path = "/underline")
     String Underline(@RequestParam(name = "fromPosition") Integer fromPosition,
                      @RequestParam(name = "toPosition") Integer toPosition) {
-        tmpHistoryLetter="";
+        tmpHistoryLetter = "";
         for (int i = fromPosition; i <= toPosition; i++) {
             boolean currentStatus = letterList.get(i).isUnderline();
             letterList.get(i).setUnderline(!currentStatus);
@@ -188,7 +181,7 @@ public class Appl {
         }
         histories.add(new History("underline", fromPosition, toPosition, tmpHistoryLetter));
         historyCursor++;
-        historiesCleaner();
+        updateHistory();
         return getString();
     }
 
@@ -196,7 +189,7 @@ public class Appl {
     @GetMapping(path = "/bold")
     String boldStyle(@RequestParam(name = "fromPosition") Integer fromPosition,
                      @RequestParam(name = "toPosition") Integer toPosition) {
-        tmpHistoryLetter="";
+        tmpHistoryLetter = "";
         for (int i = fromPosition; i <= toPosition; i++) {
             boolean currentStatus = letterList.get(i).isBold();
             letterList.get(i).setBold(!currentStatus);
@@ -204,7 +197,7 @@ public class Appl {
         }
         histories.add(new History("bold", fromPosition, toPosition, tmpHistoryLetter));
         historyCursor++;
-        historiesCleaner();
+        updateHistory();
         return getString();
     }
 
@@ -217,7 +210,7 @@ public class Appl {
         char character = letterList.get(0).getCharacter();
 
         if (letterList.size() == 0) {
-            return "empty string";
+            return "";
         }
         if (isBold) {
             sb.append("<strong>");
@@ -253,7 +246,6 @@ public class Appl {
             }
             sb.append(currentChar);
         }
-
         return sb.toString();
     }
 

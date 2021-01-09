@@ -3,7 +3,6 @@ package src;
 public class TextDto {
     public TextDto(String text) {
         this.text = text;
-
     }
 
     public TextDto() {
